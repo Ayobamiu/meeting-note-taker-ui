@@ -9,6 +9,7 @@ import {
   Users as UsersIcon,
   Video,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,6 +34,7 @@ import { meetingsApi } from "@/lib/api";
 export default function MeetingDetailView({ meeting, onAddMeeting }) {
   const [fullMeeting, setFullMeeting] = useState(meeting);
   const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const router = useRouter();
 
   // Fetch full meeting data if needed
@@ -133,9 +135,60 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
     const noteText = [
       fullMeeting.note.summary,
       "",
-      "Key Points:",
-      ...fullMeeting.note.keyPoints.map((p) => `• ${p}`),
-      "",
+      ...(fullMeeting.note.topics && fullMeeting.note.topics.length > 0
+        ? [
+            "Topics Discussed:",
+            ...fullMeeting.note.topics.map(
+              (t) => `• ${t.topic}: ${t.summary || ""}`
+            ),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.decisions && fullMeeting.note.decisions.length > 0
+        ? [
+            "Decisions Made:",
+            ...fullMeeting.note.decisions.map(
+              (d) => `✓ ${d.decision}${d.speaker ? ` (${d.speaker})` : ""}`
+            ),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.actionItems &&
+      fullMeeting.note.actionItems.length > 0
+        ? [
+            "Action Items:",
+            ...fullMeeting.note.actionItems.map(
+              (a) =>
+                `→ ${a.item}${
+                  a.assignee && a.assignee !== "Unassigned"
+                    ? ` (Assigned to: ${a.assignee})`
+                    : ""
+                }${a.dueDate ? ` (Due: ${a.dueDate})` : ""}`
+            ),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.questions && fullMeeting.note.questions.length > 0
+        ? [
+            "Questions Raised:",
+            ...fullMeeting.note.questions.map((q) => `? ${q}`),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.nextSteps && fullMeeting.note.nextSteps.length > 0
+        ? [
+            "Next Steps:",
+            ...fullMeeting.note.nextSteps.map((s) => `→ ${s}`),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.keyPoints && fullMeeting.note.keyPoints.length > 0
+        ? [
+            "Key Points:",
+            ...fullMeeting.note.keyPoints.map((p) => `• ${p}`),
+            "",
+          ]
+        : []),
       `Participants: ${fullMeeting.note.participants.join(", ")}`,
       `Duration: ${Math.floor(fullMeeting.note.duration / 60)}m ${
         fullMeeting.note.duration % 60
@@ -157,8 +210,37 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
     const noteText = [
       fullMeeting.note.summary,
       "",
-      "Key Points:",
-      ...fullMeeting.note.keyPoints.map((p) => `• ${p}`),
+      ...(fullMeeting.note.topics && fullMeeting.note.topics.length > 0
+        ? [
+            "Topics:",
+            ...fullMeeting.note.topics.map(
+              (t) => `• ${t.topic}: ${t.summary || ""}`
+            ),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.actionItems &&
+      fullMeeting.note.actionItems.length > 0
+        ? [
+            "Action Items:",
+            ...fullMeeting.note.actionItems.map(
+              (a) =>
+                `→ ${a.item}${
+                  a.assignee && a.assignee !== "Unassigned"
+                    ? ` (${a.assignee})`
+                    : ""
+                }`
+            ),
+            "",
+          ]
+        : []),
+      ...(fullMeeting.note.keyPoints && fullMeeting.note.keyPoints.length > 0
+        ? [
+            "Key Points:",
+            ...fullMeeting.note.keyPoints.map((p) => `• ${p}`),
+            "",
+          ]
+        : []),
     ].join("\n");
 
     if (navigator.share) {
@@ -174,6 +256,38 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
       }
     } else {
       handleCopyNote();
+    }
+  };
+
+  const handleRegenerateNote = async () => {
+    if (!fullMeeting || !fullMeeting.id) return;
+
+    setRegenerating(true);
+    try {
+      console.log('🔄 Regenerating note for meeting:', fullMeeting.id);
+      const response = await meetingsApi.regenerateNote(fullMeeting.id);
+
+      if (response.success && response.note) {
+        // Update the meeting with the new note
+        setFullMeeting((prev) => ({
+          ...prev,
+          note: response.note,
+        }));
+
+        // Also refresh the full meeting status to get latest data
+        const statusResponse = await meetingsApi.getMeetingStatus(
+          fullMeeting.id
+        );
+        setFullMeeting(statusResponse.meeting);
+      }
+    } catch (err) {
+      console.error("Error regenerating note:", err);
+      alert(
+        err.response?.data?.error ||
+          "Failed to regenerate note. Please try again."
+      );
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -268,6 +382,19 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleRegenerateNote}
+                  disabled={regenerating}
+                  className="border-gray-200"
+                >
+                  <RefreshCw
+                    size={16}
+                    className={`mr-2 ${regenerating ? "animate-spin" : ""}`}
+                  />
+                  {regenerating ? "Regenerating..." : "Regenerate Note"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleCopyNote}
                   className={
                     copied ? "bg-gray-100 border-gray-300" : "border-gray-200"
@@ -304,10 +431,132 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
                 </div>
               )}
 
+              {/* Topics */}
+              {fullMeeting.note.topics &&
+                fullMeeting.note.topics.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold text-black mb-3">
+                      Topics Discussed
+                    </h3>
+                    <div className="space-y-3">
+                      {fullMeeting.note.topics.map((topic, index) => (
+                        <div
+                          key={index}
+                          className="p-3 bg-gray-50 rounded-md border border-gray-200"
+                        >
+                          <h4 className="text-sm font-medium text-black mb-1">
+                            {topic.topic}
+                          </h4>
+                          {topic.summary && (
+                            <p className="text-sm text-gray-600">
+                              {topic.summary}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Decisions */}
+              {fullMeeting.note.decisions &&
+                fullMeeting.note.decisions.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold text-black mb-3">
+                      Decisions Made
+                    </h3>
+                    <ul className="space-y-2">
+                      {fullMeeting.note.decisions.map((decision, index) => (
+                        <li key={index} className="flex items-start gap-3">
+                          <span className="text-black mt-1">✓</span>
+                          <div className="flex-1">
+                            <span className="text-gray-600">
+                              {decision.decision}
+                            </span>
+                            {decision.speaker && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                — {decision.speaker}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+              {/* Action Items */}
+              {fullMeeting.note.actionItems &&
+                fullMeeting.note.actionItems.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold text-black mb-3">
+                      Action Items
+                    </h3>
+                    <ul className="space-y-3">
+                      {fullMeeting.note.actionItems.map((item, index) => (
+                        <li
+                          key={index}
+                          className="flex items-start gap-3 p-3 bg-gray-50 rounded-md border border-gray-200"
+                        >
+                          <span className="text-black mt-1">→</span>
+                          <div className="flex-1">
+                            <span className="text-gray-600">{item.item}</span>
+                            <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                              {item.assignee &&
+                                item.assignee !== "Unassigned" && (
+                                  <span>Assigned to: {item.assignee}</span>
+                                )}
+                              {item.dueDate && <span>Due: {item.dueDate}</span>}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+              {/* Questions */}
+              {fullMeeting.note.questions &&
+                fullMeeting.note.questions.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold text-black mb-3">
+                      Questions Raised
+                    </h3>
+                    <ul className="space-y-2">
+                      {fullMeeting.note.questions.map((question, index) => (
+                        <li key={index} className="flex items-start gap-3">
+                          <span className="text-black mt-1">?</span>
+                          <span className="text-gray-600 flex-1">
+                            {question}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+              {/* Next Steps */}
+              {fullMeeting.note.nextSteps &&
+                fullMeeting.note.nextSteps.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold text-black mb-3">
+                      Next Steps
+                    </h3>
+                    <ul className="space-y-2">
+                      {fullMeeting.note.nextSteps.map((step, index) => (
+                        <li key={index} className="flex items-start gap-3">
+                          <span className="text-black mt-1">→</span>
+                          <span className="text-gray-600 flex-1">{step}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
               {/* Key Points */}
               {fullMeeting.note.keyPoints &&
                 fullMeeting.note.keyPoints.length > 0 && (
-                  <div>
+                  <div className="mt-6">
                     <h3 className="text-sm font-semibold text-black mb-3">
                       Key Points
                     </h3>
@@ -373,7 +622,8 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                   <Info size={16} className="flex-shrink-0" />
                   <p>
-                    Note: After meetings end, it may take up to 6 minutes for the note to be available
+                    Note: After meetings end, it may take up to 6 minutes for
+                    the note to be available
                   </p>
                 </div>
               </div>
