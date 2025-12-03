@@ -8,6 +8,7 @@ import {
   Calendar,
   Users as UsersIcon,
   Video,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -359,14 +360,23 @@ export default function MeetingDetailView({ meeting, onAddMeeting }) {
                       />
                     </div>
                   </div>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 mb-4">
                     {fullMeeting.progress.message}
                   </p>
                 </>
               )}
               {!fullMeeting.progress && (
-                <p className="text-gray-500">Processing meeting...</p>
+                <p className="text-gray-500 mb-4">Processing meeting...</p>
               )}
+              {/* Processing time notice */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                  <Info size={16} className="flex-shrink-0" />
+                  <p>
+                    Note: After meetings end, it may take up to 6 minutes for the note to be available
+                  </p>
+                </div>
+              </div>
             </div>
           </Card>
         )}
