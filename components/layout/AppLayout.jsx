@@ -120,7 +120,7 @@ export default function AppLayout({ children }) {
           </Suspense>
 
           {/* Main Content Area */}
-          <div className="flex-1 overflow-hidden relative">
+          <div className="flex-1 overflow-y-auto relative">
             {/* Collapse Button - Top Left of Main Content */}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
